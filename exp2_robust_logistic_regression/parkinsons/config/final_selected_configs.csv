@@ -1,0 +1,10 @@
+dataset,model,epsilon,alpha0,lambda_l1,lmaj_factor,total_updates,sampling_policy,selection_label
+parkinsons,direct,0.15,0.003,0.01,,2500,uniform_iid_nested,path_validation
+parkinsons,direct,0.25,0.003,0.001,,2500,uniform_iid_nested,path_validation
+parkinsons,direct,0.35,0.003,0.01,,2500,uniform_iid_nested,path_validation
+parkinsons,majorant,0.15,0.012,0.06,1.5,2500,uniform_iid_nested,path_validation
+parkinsons,majorant,0.25,0.012,0.04,1.5,2500,uniform_iid_nested,path_validation
+parkinsons,majorant,0.35,0.018,0.04,1.01,2500,uniform_iid_nested,path_validation
+parkinsons,erm,0.15,0.005,0.0,,2500,clean,erm_reference
+parkinsons,erm,0.25,0.005,0.0,,2500,clean,erm_reference
+parkinsons,erm,0.35,0.005,0.0,,2500,clean,erm_reference
