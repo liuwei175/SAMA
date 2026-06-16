@@ -35,8 +35,8 @@ class ExperimentConfig:
     seed: int = 42
     y_grid_size: int = 201
     x_grid_size: int = 81
-    output_eps: Path = Path("results/figures/growing_samples_multi_m.eps")
-    output_pdf: Path = Path("results/figures/growing_samples_multi_m.pdf")
+    output_eps: Path = Path("results/figures/growing_samples_multi_m_left.eps")
+    output_pdf: Path = Path("results/figures/growing_samples_multi_m_left.pdf")
     output_csv: Path = Path("results/data/growing_samples_multi_m_data.csv")
 
     def ns(self) -> np.ndarray:
@@ -200,26 +200,64 @@ def inner_solve_stage(x0: np.ndarray, data: StageData, l_smooth: float, mu: floa
 
 def save_results_figure(ns: np.ndarray, ms: tuple[int, ...], mean_residual: np.ndarray, mean_gap: np.ndarray, output_eps: Path, output_pdf: Path) -> None:
     output_eps.parent.mkdir(parents=True, exist_ok=True)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7.6, 2.75))
-    fig.subplots_adjust(wspace=0.34, left=0.10, right=0.98, top=0.96, bottom=0.23)
+    output_pdf.parent.mkdir(parents=True, exist_ok=True)
     markers = ("o", "s", "^", "D", "v", "P")
+    colors = ("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b")
     markevery = max(1, len(ns) // 12)
+
+    fig_left, ax1 = plt.subplots(1, 1, figsize=(3.7, 2.75))
+    fig_left.subplots_adjust(left=0.18, right=0.98, top=0.96, bottom=0.23)
     for idx, m in enumerate(ms):
-        ax1.semilogy(ns, np.maximum(mean_residual[:, idx], 1e-16), "-", linewidth=1.0, marker=markers[idx], markersize=3.0, markevery=markevery, label=rf"$m={m}$")
-        ax2.semilogy(ns, np.maximum(mean_gap[:, idx], 1e-16), "-", linewidth=1.0, marker=markers[idx], markersize=3.0, markevery=markevery, label=rf"$m={m}$")
+        ax1.semilogy(ns, np.maximum(mean_residual[:, idx], 1e-16), "-", color=colors[idx], linewidth=1.0, marker=markers[idx], markersize=3.0, markevery=markevery, label=rf"$m={m}$")
     ax1.set_xlabel(r"sample size $N$")
-    ax1.set_ylabel(r"mean $r_k^m(\hat{x}_k^m)$")
+    ax1.set_ylabel(r"mean stationarity residual")
     ax1.set_xlim(int(ns[0]), int(ns[-1]))
     ax1.set_ylim(1e-4, 1e-1)
     ax1.legend(loc="best")
+    fig_left.savefig(output_pdf.with_name("growing_samples_multi_m_left.pdf"), format="pdf", bbox_inches="tight")
+    fig_left.savefig(output_eps.with_name("growing_samples_multi_m_left.eps"), format="eps", bbox_inches="tight")
+    plt.close(fig_left)
+
+    fig_right, ax2 = plt.subplots(1, 1, figsize=(3.7, 2.75))
+    fig_right.subplots_adjust(left=0.18, right=0.98, top=0.96, bottom=0.23)
+    for idx, m in enumerate(ms):
+        ax2.semilogy(ns, np.maximum(mean_gap[:, idx], 1e-16), "-", color=colors[idx], linewidth=1.0, marker=markers[idx], markersize=3.0, markevery=markevery, label=rf"$m={m}$")
     ax2.set_xlabel(r"sample size $N$")
-    ax2.set_ylabel(r"mean $V^m(\hat{x}_k^m)-\nu^{m,\star}$")
+    ax2.set_ylabel(r"mean approximation error")
     ax2.set_xlim(int(ns[0]), int(ns[-1]))
     ax2.set_ylim(1e-4, 1e0)
     ax2.legend(loc="best")
-    fig.savefig(output_pdf, format="pdf")
-    fig.savefig(output_eps, format="eps")
-    plt.close(fig)
+    fig_right.savefig(output_pdf.with_name("growing_samples_multi_m_right.pdf"), format="pdf", bbox_inches="tight")
+    fig_right.savefig(output_eps.with_name("growing_samples_multi_m_right.eps"), format="eps", bbox_inches="tight")
+    plt.close(fig_right)
+
+
+def load_results_from_csv(path: Path) -> tuple[np.ndarray, tuple[int, ...], np.ndarray, np.ndarray]:
+    rows: list[dict[str, str]] = []
+    with path.open(newline="") as csv_file:
+        reader = csv.DictReader(csv_file)
+        rows.extend(reader)
+
+    ms = tuple(sorted({int(row["m"]) for row in rows}))
+    ns = np.asarray(sorted({int(row["N"]) for row in rows}), dtype=int)
+    mean_residual = np.zeros((len(ns), len(ms)), dtype=float)
+    mean_gap = np.zeros_like(mean_residual)
+    ns_index = {n: i for i, n in enumerate(ns)}
+    ms_index = {m: i for i, m in enumerate(ms)}
+    buckets: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    for row in rows:
+        key = (int(row["N"]), int(row["m"]))
+        buckets.setdefault(key, []).append(
+            (
+                float(row["smoothed_stationarity_residual"]),
+                float(row["reference_value_gap"]),
+            )
+        )
+    for (n, m), values in buckets.items():
+        arr = np.asarray(values, dtype=float)
+        mean_residual[ns_index[n], ms_index[m]] = float(arr[:, 0].mean())
+        mean_gap[ns_index[n], ms_index[m]] = float(arr[:, 1].mean())
+    return ns, ms, mean_residual, mean_gap
 
 
 def run_experiment(cfg: ExperimentConfig) -> None:
@@ -288,6 +326,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-pool", type=int, default=1000)
     parser.add_argument("--max-inner-iters", type=int, default=10_000_000)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--plot-only", action="store_true", help="Regenerate figures from the existing CSV without rerunning the experiment.")
     return parser.parse_args()
 
 
@@ -300,6 +339,14 @@ def main() -> None:
         max_inner_iters=args.max_inner_iters,
         seed=args.seed,
     )
+    if args.plot_only:
+        root = Path(__file__).resolve().parents[1]
+        cfg.output_eps = root / cfg.output_eps
+        cfg.output_pdf = root / cfg.output_pdf
+        cfg.output_csv = root / cfg.output_csv
+        ns, ms, mean_residual, mean_gap = load_results_from_csv(cfg.output_csv)
+        save_results_figure(ns, ms, mean_residual, mean_gap, cfg.output_eps, cfg.output_pdf)
+        return
     run_experiment(cfg)
 
 

@@ -4,7 +4,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-from matplotlib.patches import Patch
 from pathlib import Path
 from PIL import Image
 
@@ -175,37 +174,6 @@ def overlay_three_surfaces(ax, X1, X2, V_true, V_majorant, V_direct):
     )
 
 
-def add_column_labels_bottom(fig, axes, labels, pad=0.050, fontsize=13):
-    # For two-line labels, centering w.r.t. the full axes box is more stable
-    for ax, lab in zip(axes, labels):
-        ax_bb = ax.get_position()
-        xcenter = 0.5 * (ax_bb.x0 + ax_bb.x1)
-        y = ax_bb.y0 - pad
-        fig.text(
-            xcenter, y, lab,
-            ha="center", va="top",
-            fontsize=fontsize,
-            linespacing=1.15
-        )
-
-
-def add_global_legend(fig):
-    handles = [
-        Patch(facecolor="dimgray", edgecolor="black", alpha=0.3, label=r"Reference surface $V^m$"),
-        Patch(facecolor="dodgerblue", edgecolor="dodgerblue", alpha=0.6, label=r"Majorant approximation $V_N^m$"),
-        Patch(facecolor="tomato", edgecolor="tomato", alpha=0.6, label=r"Standard approximation $\bar{V}_N^m$"),
-    ]
-    labels = [h.get_label() for h in handles]
-    fig.legend(
-        handles, labels,
-        loc="upper center",
-        ncol=3,
-        frameon=False,
-        fontsize=11,
-        bbox_to_anchor=(0.5, 0.94)
-    )
-
-
 def build_pack(X1, X2, N_list, m_list, seed_base=0):
     pack = []
     for m, N in zip(m_list, N_list):
@@ -232,45 +200,33 @@ def global_zlim_from_pack(pack):
     return (zmin - pad, zmax + pad)
 
 
-def render_single_row(outdir, pack, zlim, is_sweep_N=True, grid_res=41, out_name="toy_1row.pdf"):
+def render_panel(outdir, item, zlim, out_stem, grid_res=41):
     X1, X2 = make_grid(grid_res)
     xticks, yticks = [-1, -0.5, 0, 0.5, 1], [-1, -0.5, 0, 0.5, 1]
 
-    # Keep the same compact layout; only slightly enlarge bottom margin
-    fig = plt.figure(figsize=(13.6, 4.15))
-    axes = []
+    _m, _N, V_t, V_m, V_d, _err, _e_prop, _e_base = item
+    fig = plt.figure(figsize=(3.4, 3.0))
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
+    overlay_three_surfaces(ax, X1, X2, V_t, V_m, V_d)
+    style_axes(ax, zlim, xticks, yticks, label_axes=True)
+    ax.set_zlabel("Function value", fontsize=10, labelpad=5)
+    fig.subplots_adjust(left=0.00, right=0.98, bottom=0.02, top=0.98)
 
-    for c, item in enumerate(pack):
-        m, N, V_t, V_m, V_d, err, e_prop, e_base = item
-        ax = fig.add_subplot(1, 4, c + 1, projection='3d')
-        overlay_three_surfaces(ax, X1, X2, V_t, V_m, V_d)
-        style_axes(ax, zlim, xticks, yticks, label_axes=True)
-        if c == 0:
-            ax.set_zlabel("Function value", fontsize=11, labelpad=6)
-        else:
-            ax.set_zlabel("")
-        axes.append(ax)
-
-    labels = [
-        rf"$m={m},\, N={N}$"
-        for (m, N, *_rest, err, e_prop, e_base) in pack
-    ]
-
-    add_column_labels_bottom(fig, axes, labels, pad=0.060, fontsize=13)
-    add_global_legend(fig)
-
-    fig.subplots_adjust(top=0.80, bottom=0.14, wspace=0.03)
-
-    out = Path(outdir) / out_name
-    fig.savefig(out, format="pdf", bbox_inches='tight')
-    png_out = Path(outdir) / out_name.replace(".pdf", ".png")
-    fig.savefig(png_out, format="png", dpi=180, bbox_inches='tight')
-    eps_out = Path(outdir) / out_name.replace(".pdf", ".eps")
+    out = Path(outdir) / f"{out_stem}.pdf"
+    fig.savefig(out, format="pdf", bbox_inches="tight")
+    png_out = Path(outdir) / f"{out_stem}.png"
+    fig.savefig(png_out, format="png", dpi=180, bbox_inches="tight")
+    eps_out = Path(outdir) / f"{out_stem}.eps"
     Image.open(png_out).convert("RGB").save(eps_out, "EPS")
     plt.close(fig)
     print(f"Saved: {out.resolve()}")
     print(f"Saved: {eps_out.resolve()}")
     print(f"Saved: {png_out.resolve()}")
+
+
+def render_panel_set(outdir, pack, zlim, stems, grid_res=41):
+    for item, stem in zip(pack, stems):
+        render_panel(outdir, item, zlim, stem, grid_res=grid_res)
 
 
 if __name__ == "__main__":
@@ -298,15 +254,29 @@ if __name__ == "__main__":
     zlim_global = global_zlim_from_pack(pack_sweep_N + pack_sweep_m)
 
     print("Rendering Figure 1: Effect of Sample Size ...")
-    render_single_row(
-        outdir, pack_sweep_N, zlim_global,
-        is_sweep_N=True,
-        out_name="toy_fixedm_sweepN_1row.pdf"
+    render_panel_set(
+        outdir,
+        pack_sweep_N,
+        zlim_global,
+        stems=[
+            "toy_fixedm_sweepN_N20",
+            "toy_fixedm_sweepN_N50",
+            "toy_fixedm_sweepN_N100",
+            "toy_fixedm_sweepN_N200",
+        ],
+        grid_res=grid_res,
     )
 
     print("Rendering Figure 2: Effect of Inner Dimension ...")
-    render_single_row(
-        outdir, pack_sweep_m, zlim_global,
-        is_sweep_N=False,
-        out_name="toy_fixedN_sweepm_1row.pdf"
+    render_panel_set(
+        outdir,
+        pack_sweep_m,
+        zlim_global,
+        stems=[
+            "toy_fixedN_sweepm_m2",
+            "toy_fixedN_sweepm_m3",
+            "toy_fixedN_sweepm_m4",
+            "toy_fixedN_sweepm_m5",
+        ],
+        grid_res=grid_res,
     )

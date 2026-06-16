@@ -17,6 +17,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 from matplotlib.ticker import NullFormatter, NullLocator
 
 A_COEFF = 0.2
@@ -239,51 +240,88 @@ def plot_beta_order(beta_results: dict[str, np.ndarray], relative_results: dict[
         "ytick.labelsize": 9,
         "legend.fontsize": 8,
     })
-    fig, (ax2, ax1) = plt.subplots(1, 2, figsize=(7.6, 2.75))
-    fig.subplots_adjust(wspace=0.34, left=0.10, right=0.98, top=0.96, bottom=0.23)
-
-    ax1.loglog(beta_n, gap_direct, marker="o", linestyle="--", color="#1f77b4", markersize=3.0, linewidth=1.35, label=rf"$\bar{{V}}_N$ ($order={direct_slope:.2f}$)")
-    ax1.loglog(beta_n, gap_majorant, marker="^", linestyle="-", color="#d62728", markersize=3.4, linewidth=1.35, label=rf"$V_N$ ($order={majorant_slope:.2f}$)")
-    ax1.loglog(beta_ref, direct_ref, linestyle="-.", color="#1f77b4", linewidth=1.0, label=r"$O(\beta_N)$")
-    ax1.loglog(beta_ref, majorant_ref, linestyle=":", color="#d62728", linewidth=1.2, label=r"$O(\beta_N^2)$")
-    ax1.set_xlabel(r"coverage radius $\beta_N$")
-    ax1.set_ylabel(r"uniform error $\|\cdot - V^2\|_\infty$")
-    ax1.set_yticks([1e-1, 1e-2])
-    ax1.yaxis.set_minor_locator(NullLocator())
-    ax1.legend(loc="lower right", frameon=True, framealpha=0.86, fancybox=False, borderpad=0.3)
+    fig_left, ax2 = plt.subplots(1, 1, figsize=(3.7, 2.75))
+    fig_left.subplots_adjust(left=0.18, right=0.98, top=0.96, bottom=0.23)
 
     style_map = {
         2: dict(color="#1f77b4", vn_marker="o", bar_marker="x"),
         3: dict(color="#ff7f0e", vn_marker="s", bar_marker="D"),
         5: dict(color="#2ca02c", vn_marker="^", bar_marker="v"),
     }
-    handles, labels = [], []
     for m in sorted(relative_results):
         dat = relative_results[m]
         style = style_map[m]
-        line_vn, = ax2.semilogy(dat["Ns"], dat["err_VN"] / abs(v_star_by_m[m]), linestyle="-", marker=style["vn_marker"], color=style["color"], markersize=3.0, markevery=2, linewidth=1.15)
-        line_bar, = ax2.semilogy(dat["Ns"], dat["err_barVN"] / abs(v_star_by_m[m]), linestyle=(0, (4, 2)), marker=style["bar_marker"], markerfacecolor="white", markeredgecolor=style["color"], color=style["color"], markersize=3.0, markevery=2, linewidth=1.15)
-        handles.extend([line_vn, line_bar])
-        labels.extend([r"$V_N$", rf"$\bar{{V}}_N$, $m={m}$"])
+        ax2.semilogy(dat["Ns"], dat["err_VN"] / abs(v_star_by_m[m]), linestyle="-", marker=style["vn_marker"], color=style["color"], markersize=3.0, markevery=2, linewidth=1.15)
+        ax2.semilogy(dat["Ns"], dat["err_barVN"] / abs(v_star_by_m[m]), linestyle=(0, (4, 2)), marker=style["bar_marker"], markerfacecolor="white", markeredgecolor=style["color"], color=style["color"], markersize=3.0, markevery=2, linewidth=1.15)
     ax2.set_xlim(0, 200)
     ax2.set_xticks(np.arange(0, 201, 40))
     ax2.set_xlabel(r"sample size $N$")
-    ax2.set_ylabel(r"relative value gap in $V^m$")
+    ax2.set_ylabel(r"relative value gap")
     ax2.set_yticks([1e0, 1e-1, 1e-2])
     ax2.yaxis.set_minor_locator(NullLocator())
-    ax2.legend(handles, labels, loc="lower left", ncol=2, frameon=True, framealpha=0.86, fancybox=False, borderpad=0.3, handlelength=3.2, columnspacing=0.8, handletextpad=0.45)
+    sorted_ms = sorted(relative_results)
+    vn_handles = [
+        Line2D([], [], color=style_map[m]["color"], marker=style_map[m]["vn_marker"], linestyle="-", linewidth=1.15, markersize=3.0)
+        for m in sorted_ms
+    ]
+    bar_handles = [
+        Line2D([], [], color=style_map[m]["color"], marker=style_map[m]["bar_marker"], markerfacecolor="white", markeredgecolor=style_map[m]["color"], linestyle=(0, (4, 2)), linewidth=1.15, markersize=3.0)
+        for m in sorted_ms
+    ]
+    m_handles = [Patch(facecolor="none", edgecolor="none") for _ in sorted_ms]
+    handles = vn_handles + bar_handles + m_handles
+    labels = [r"$V_N$" for _ in sorted_ms] + [r"$\bar{V}_N$" for _ in sorted_ms] + [rf"$m={m}$" for m in sorted_ms]
+    ax2.legend(handles, labels, loc="lower left", ncol=3, frameon=True, framealpha=0.86, fancybox=False, borderpad=0.3, handlelength=2.2, columnspacing=0.5, handletextpad=0.35)
+    ax2.grid(True, which="major", linewidth=0.32, alpha=0.22)
+    fig_left.savefig(outdir / "toy_beta_order_left.pdf", bbox_inches="tight")
+    fig_left.savefig(outdir / "toy_beta_order_left.eps", format="eps", bbox_inches="tight")
+    plt.close(fig_left)
+
+    fig_right, ax1 = plt.subplots(1, 1, figsize=(3.7, 2.75))
+    fig_right.subplots_adjust(left=0.18, right=0.98, top=0.96, bottom=0.23)
+
+    ax1.loglog(beta_n, gap_direct, marker="o", linestyle="--", color="#1f77b4", markersize=3.0, linewidth=1.35)
+    ax1.loglog(beta_n, gap_majorant, marker="^", linestyle="-", color="#d62728", markersize=3.4, linewidth=1.35)
+    ax1.loglog(beta_ref, direct_ref, linestyle="-.", color="#1f77b4", linewidth=1.0)
+    ax1.loglog(beta_ref, majorant_ref, linestyle=":", color="#d62728", linewidth=1.2)
+    ax1.set_xlabel(r"coverage radius $\beta_N$")
+    ax1.set_ylabel(r"uniform approximation error")
+    ax1.set_yticks([1e-1, 1e-2])
+    ax1.yaxis.set_minor_locator(NullLocator())
+    ax1.legend(
+        [
+            Line2D([], [], marker="o", linestyle="--", color="#1f77b4", markersize=3.0, linewidth=1.35),
+            Line2D([], [], marker="^", linestyle="-", color="#d62728", markersize=3.4, linewidth=1.35),
+            Line2D([], [], linestyle="-.", color="#1f77b4", linewidth=1.0),
+            Line2D([], [], linestyle=":", color="#d62728", linewidth=1.2),
+        ],
+        [
+            rf"$\bar{{V}}_N$ ($order={direct_slope:.2f}$)",
+            rf"$V_N$ ($order={majorant_slope:.2f}$)",
+            r"$O(\beta_N)$",
+            r"$O(\beta_N^2)$",
+        ],
+        loc="lower left",
+        ncol=2,
+        frameon=True,
+        framealpha=0.86,
+        fancybox=False,
+        borderpad=0.3,
+        handlelength=2.0,
+        columnspacing=0.7,
+        handletextpad=0.4,
+    )
 
     ax1.set_xlim(beta_n.min() * 0.9, beta_n.max() * 1.1)
     ax1.invert_xaxis()
     ax1.set_xticks([0.8, 0.4, 0.2, 0.1])
     ax1.set_xticklabels(["0.8", "0.4", "0.2", "0.1"])
     ax1.xaxis.set_minor_formatter(NullFormatter())
-    for ax in (ax1, ax2):
-        ax.grid(True, which="major", linewidth=0.32, alpha=0.22)
+    ax1.grid(True, which="major", linewidth=0.32, alpha=0.22)
 
-    fig.savefig(outdir / "toy_beta_order.pdf", bbox_inches="tight")
-    fig.savefig(outdir / "toy_beta_order.eps", format="eps", bbox_inches="tight")
-    plt.close(fig)
+    fig_right.savefig(outdir / "toy_beta_order_right.pdf", bbox_inches="tight")
+    fig_right.savefig(outdir / "toy_beta_order_right.eps", format="eps", bbox_inches="tight")
+    plt.close(fig_right)
 
 
 def main() -> None:
